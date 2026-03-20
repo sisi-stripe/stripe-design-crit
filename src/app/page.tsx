@@ -1,65 +1,203 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useCallback, useMemo } from "react";
+import { sessions as initialSessions, feedbackBySession } from "@/data/mockData";
+import { Feedback, LevelOfConcern, Session, getSessionStatus } from "@/types";
+import Sidebar from "@/components/Sidebar";
+import DesignPreview from "@/components/DesignPreview";
+import FeedbackStream from "@/components/FeedbackStream";
+import AISummary from "@/components/AISummary";
+import ActionItems from "@/components/ActionItems";
+import NewSessionModal from "@/components/NewSessionModal";
+import DeleteConfirmModal from "@/components/DeleteConfirmModal";
 
 export default function Home() {
+  const [allSessions, setAllSessions] = useState(initialSessions);
+  const [activeCritId, setActiveCritId] = useState("mm");
+  const [activeSessionId, setActiveSessionId] = useState(
+    initialSessions.find((s) => s.critId === "mm")?.id || initialSessions[0].id
+  );
+  const [allFeedback, setAllFeedback] = useState(feedbackBySession);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
+  const filteredSessions = useMemo(
+    () => allSessions.filter((s) => s.critId === activeCritId),
+    [allSessions, activeCritId]
+  );
+
+  const activeSession = allSessions.find((s) => s.id === activeSessionId);
+  const safeActiveSession = activeSession || filteredSessions[0];
+  const feedback = safeActiveSession
+    ? allFeedback[safeActiveSession.id] || []
+    : [];
+  const isClosed = safeActiveSession
+    ? getSessionStatus(safeActiveSession.date) === "closed"
+    : false;
+  const deletingSession = deletingSessionId
+    ? allSessions.find((s) => s.id === deletingSessionId)
+    : null;
+
+  const handleSwitchCrit = useCallback(
+    (critId: string) => {
+      setActiveCritId(critId);
+      const firstInCrit = allSessions.find((s) => s.critId === critId);
+      if (firstInCrit) setActiveSessionId(firstInCrit.id);
+    },
+    [allSessions]
+  );
+
+  const handleUpvote = useCallback(
+    (feedbackId: string) => {
+      const sid = safeActiveSession?.id;
+      if (!sid) return;
+      setAllFeedback((prev) => ({
+        ...prev,
+        [sid]: (prev[sid] || []).map((fb) =>
+          fb.id === feedbackId ? { ...fb, upvotes: fb.upvotes + 1 } : fb
+        ),
+      }));
+    },
+    [safeActiveSession]
+  );
+
+  const handleCreateSession = useCallback(
+    (session: Session) => {
+      const withCrit = { ...session, critId: activeCritId };
+      setAllSessions((prev) => [withCrit, ...prev]);
+      setAllFeedback((prev) => ({ ...prev, [session.id]: [] }));
+      setActiveSessionId(session.id);
+    },
+    [activeCritId]
+  );
+
+  const handleUpdateSession = useCallback((updated: Session) => {
+    setAllSessions((prev) =>
+      prev.map((s) => (s.id === updated.id ? updated : s))
+    );
+  }, []);
+
+  const handleDeleteSession = useCallback(
+    (id: string) => {
+      setAllSessions((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        if (activeSessionId === id) {
+          const nextInCrit = next.find((s) => s.critId === activeCritId);
+          if (nextInCrit) setActiveSessionId(nextInCrit.id);
+        }
+        return next;
+      });
+      setAllFeedback((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setDeletingSessionId(null);
+    },
+    [activeSessionId, activeCritId]
+  );
+
+  const openNewModal = () => {
+    setEditingSession(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (id: string) => {
+    const session = allSessions.find((s) => s.id === id);
+    if (session) {
+      setEditingSession(session);
+      setIsModalOpen(true);
+    }
+  };
+
+  const handleSubmit = useCallback(
+    (data: {
+      reviewerName: string;
+      level: LevelOfConcern;
+      text: string;
+      screenshotUrl?: string;
+    }) => {
+      const sid = safeActiveSession?.id;
+      if (!sid) return;
+      const newFeedback: Feedback = {
+        id: `f-${Date.now()}`,
+        sessionId: sid,
+        reviewerName: data.reviewerName,
+        level: data.level,
+        text: data.text,
+        timestamp: "Just now",
+        upvotes: 0,
+        screenshotUrl: data.screenshotUrl,
+      };
+      setAllFeedback((prev) => ({
+        ...prev,
+        [sid]: [newFeedback, ...(prev[sid] || [])],
+      }));
+    },
+    [safeActiveSession]
+  );
+
+  if (!safeActiveSession) {
+    return (
+      <div className="flex h-screen items-center justify-center text-gray-400 text-[14px]">
+        No sessions found.
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex h-screen overflow-hidden p-3 gap-3" style={{ background: "#F2F2F2" }}>
+      <NewSessionModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingSession(null);
+        }}
+        onCreate={handleCreateSession}
+        onUpdate={handleUpdateSession}
+        existingSessions={filteredSessions}
+        editingSession={editingSession}
+      />
+
+      <DeleteConfirmModal
+        isOpen={!!deletingSessionId}
+        sessionTitle={deletingSession?.title || ""}
+        onConfirm={() =>
+          deletingSessionId && handleDeleteSession(deletingSessionId)
+        }
+        onCancel={() => setDeletingSessionId(null)}
+      />
+
+      <Sidebar
+        sessions={filteredSessions}
+        activeSessionId={safeActiveSession.id}
+        activeCritId={activeCritId}
+        onSelectSession={setActiveSessionId}
+        onSwitchCrit={handleSwitchCrit}
+        onNewSession={openNewModal}
+        onEditSession={openEditModal}
+        onDeleteSession={(id) => setDeletingSessionId(id)}
+      />
+
+      <DesignPreview session={safeActiveSession} isClosed={isClosed} />
+
+      <aside className="w-[400px] flex-shrink-0 rounded-xl bg-white flex flex-col h-full overflow-hidden" style={{ boxShadow: "0 4px 16px 0 rgba(0,0,0,0.04)" }}>
+        <div className="flex-1 min-h-0">
+          <FeedbackStream
+            feedback={feedback}
+            isClosed={isClosed}
+            onUpvote={handleUpvote}
+            onSubmit={handleSubmit}
+            sessionTitle={safeActiveSession.title}
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex-shrink-0 overflow-y-auto max-h-64">
+          <AISummary feedback={feedback} />
+          <ActionItems feedback={feedback} />
         </div>
-      </main>
+      </aside>
     </div>
   );
 }
