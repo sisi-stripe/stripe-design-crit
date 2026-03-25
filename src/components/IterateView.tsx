@@ -6,6 +6,7 @@ import { EXAMPLE_PROJECT_ID, EXAMPLE_PROJECT_TITLE, exampleFeedback } from "@/da
 import IterateSidebar from "./IterateSidebar";
 import ImageCanvas from "./ImageCanvas";
 import IterateFeedback from "./IterateFeedback";
+import NewProjectModal from "./NewProjectModal";
 
 interface IterateProject {
   id: string;
@@ -25,6 +26,7 @@ export default function IterateView({ onBack }: IterateViewProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [hoveredBbox, setHoveredBbox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [feedbackWidth, setFeedbackWidth] = useState(320);
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -116,14 +118,49 @@ export default function IterateView({ onBack }: IterateViewProps) {
     []
   );
 
-  const handleNewProject = useCallback(() => {
+  const handleCreateProject = useCallback(async (
+    name: string,
+    imageDataUrl?: string,
+    imageMediaType?: string,
+    figmaUrl?: string,
+  ) => {
     const id = `proj-${Date.now()}`;
-    const project: IterateProject = { id, title: `Project ${projects.length + 1}` };
-    setProjects((prev) => [...prev, project]);
+    setProjects((prev) => [...prev, { id, title: name }]);
     setProjectFeedback((prev) => ({ ...prev, [id]: [] }));
     setActiveProjectId(id);
     setGenerateError(null);
-  }, [projects.length]);
+
+    if (imageDataUrl) {
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, imageDataUrl, imageMediaType } : p));
+      generateCritique(imageDataUrl, name, id);
+    } else if (figmaUrl) {
+      setIsGenerating(true);
+      try {
+        const res = await fetch("/api/figma-screenshot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ figmaUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          setGenerateError(data.error || "Failed to load Figma frame");
+          setIsGenerating(false);
+          return;
+        }
+        setProjects((prev) =>
+          prev.map((p) => p.id === id ? { ...p, imageDataUrl: data.imageDataUrl, imageMediaType: "image/png" } : p)
+        );
+        generateCritique(data.imageDataUrl, name, id);
+      } catch {
+        setGenerateError("Network error — could not load Figma frame");
+        setIsGenerating(false);
+      }
+    }
+  }, [generateCritique]);
+
+  const handleRenameProject = useCallback((id: string, newTitle: string) => {
+    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, title: newTitle } : p));
+  }, []);
 
   const handleImageDrop = useCallback(
     (dataUrl: string, mediaType: string) => {
@@ -201,8 +238,17 @@ export default function IterateView({ onBack }: IterateViewProps) {
         projects={projects}
         activeProjectId={activeProjectId}
         onSelectProject={setActiveProjectId}
-        onNewProject={handleNewProject}
+        onNewProject={() => setShowNewProjectModal(true)}
+        onRenameProject={handleRenameProject}
         onBack={onBack}
+      />
+
+      <NewProjectModal
+        isOpen={showNewProjectModal}
+        onClose={() => setShowNewProjectModal(false)}
+        onCreate={(name, imageDataUrl, imageMediaType, figmaUrl) =>
+          handleCreateProject(name, imageDataUrl, imageMediaType, figmaUrl)
+        }
       />
 
       <div className="flex-1 min-w-0 h-full">

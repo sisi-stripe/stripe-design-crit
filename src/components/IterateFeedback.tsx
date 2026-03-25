@@ -202,7 +202,29 @@ export default function IterateFeedback({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        {!hasImage ? (
+        {isGenerating && !hasFeedback ? (
+          /* Loading — either fetching Figma frame or running critique */
+          <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
+            <svg className="w-5 h-5 animate-spin text-indigo-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <p className="text-[13px] font-medium text-indigo-500">
+              {!hasImage ? "Loading Figma frame..." : "Analyzing design..."}
+            </p>
+          </div>
+        ) : error && !hasFeedback ? (
+          /* Error state */
+          <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
+            <p className="text-[12px] text-red-500 bg-red-50 px-3 py-2 rounded-md text-left">{error}</p>
+            <button
+              onClick={onRegenerate}
+              className="text-[12px] text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              Try again
+            </button>
+          </div>
+        ) : !hasImage ? (
           /* No image */
           <div className="flex flex-col items-center justify-center h-full px-6 text-center">
             <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
@@ -212,26 +234,6 @@ export default function IterateFeedback({
             </div>
             <p className="text-[13px] font-medium text-gray-500">No image yet</p>
             <p className="text-[12px] text-gray-400 mt-1">Drop an image to start your critique.</p>
-          </div>
-        ) : isGenerating && !hasFeedback ? (
-          /* Generating — first time */
-          <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
-            <svg className="w-5 h-5 animate-spin text-indigo-500" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <p className="text-[13px] font-medium text-indigo-500">Analyzing design...</p>
-          </div>
-        ) : error && !hasFeedback ? (
-          /* Error state */
-          <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
-            <p className="text-[12px] text-red-500 bg-red-50 px-3 py-2 rounded-md">{error}</p>
-            <button
-              onClick={onRegenerate}
-              className="text-[12px] text-indigo-600 hover:text-indigo-700 font-medium"
-            >
-              Try again
-            </button>
           </div>
         ) : (
           /* Feedback items */

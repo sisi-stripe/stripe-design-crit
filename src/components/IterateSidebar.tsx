@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
+
 interface IterateProject {
   id: string;
   title: string;
@@ -11,6 +13,7 @@ interface IterateSidebarProps {
   activeProjectId: string | null;
   onSelectProject: (id: string) => void;
   onNewProject: () => void;
+  onRenameProject: (id: string, newTitle: string) => void;
   onBack: () => void;
 }
 
@@ -19,8 +22,29 @@ export default function IterateSidebar({
   activeProjectId,
   onSelectProject,
   onNewProject,
+  onRenameProject,
   onBack,
 }: IterateSidebarProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingId) setTimeout(() => editInputRef.current?.focus(), 50);
+  }, [editingId]);
+
+  const startEditing = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(id);
+    setEditingTitle(currentTitle);
+  };
+
+  const commitEdit = () => {
+    if (editingId && editingTitle.trim()) {
+      onRenameProject(editingId, editingTitle.trim());
+    }
+    setEditingId(null);
+  };
   return (
     <aside
       className="w-[340px] flex-shrink-0 flex flex-col h-full rounded-xl bg-white relative overflow-hidden"
@@ -79,20 +103,36 @@ export default function IterateSidebar({
                     <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
                       {project.imageDataUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={project.imageDataUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={project.imageDataUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <svg className="w-3.5 h-3.5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5z" />
                         </svg>
                       )}
                     </div>
-                    <span className={`text-[13px] font-medium leading-tight truncate ${isActive ? "text-gray-900" : "text-gray-700"}`}>
-                      {project.title}
-                    </span>
+                    {editingId === project.id ? (
+                      <input
+                        ref={editInputRef}
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onBlur={commitEdit}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitEdit();
+                          if (e.key === "Escape") setEditingId(null);
+                          e.stopPropagation();
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-1 min-w-0 text-[13px] font-medium text-gray-900 bg-white border border-indigo-400 rounded px-1.5 py-0.5 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    ) : (
+                      <span
+                        className={`text-[13px] font-medium leading-tight truncate flex-1 min-w-0 ${isActive ? "text-gray-900" : "text-gray-700"}`}
+                        onDoubleClick={(e) => startEditing(project.id, project.title, e)}
+                        title="Double-click to rename"
+                      >
+                        {project.title}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
