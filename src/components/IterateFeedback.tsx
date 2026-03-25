@@ -13,7 +13,7 @@ interface IterateFeedbackProps {
   onHoverFeedback?: (bbox: { x: number; y: number; width: number; height: number } | null) => void;
   onResolve?: (id: string) => void;
   onIterate?: (id: string) => void;
-  onRefineFeedback?: (id: string, newRationale: string, thread: { role: string; text: string }[]) => void;
+  onRefineFeedback?: (id: string, newRationale: string, thread: { role: "user" | "assistant"; text: string }[]) => void;
   width?: number;
 }
 
@@ -38,9 +38,9 @@ export default function IterateFeedback({
     if (!iterationText.trim() || !iteratingItem || isRefining) return;
     setIsRefining(true);
     const existingThread = iteratingItem.conversationThread ?? [];
-    const conversationHistory = existingThread.length > 0
+    const conversationHistory: { role: "user" | "assistant"; text: string }[] = existingThread.length > 0
       ? existingThread
-      : [{ role: "assistant", text: `${iteratingItem.text}${iteratingItem.rationale ? `\n\nSuggested change: ${iteratingItem.rationale}` : ""}` }];
+      : [{ role: "assistant" as const, text: `${iteratingItem.text}${iteratingItem.rationale ? `\n\nSuggested change: ${iteratingItem.rationale}` : ""}` }];
     try {
       const res = await fetch("/api/taste", {
         method: "POST",
@@ -49,10 +49,10 @@ export default function IterateFeedback({
       });
       const data = await res.json();
       if (res.ok && data.text) {
-        const newThread = [
+        const newThread: { role: "user" | "assistant"; text: string }[] = [
           ...conversationHistory,
-          { role: "user", text: iterationText },
-          { role: "assistant", text: data.text },
+          { role: "user" as const, text: iterationText },
+          { role: "assistant" as const, text: data.text },
         ];
         onRefineFeedback?.(iteratingItem.id, data.text, newThread);
         setIterationText("");

@@ -222,7 +222,7 @@ export default function IterateView({ onBack }: IterateViewProps) {
     // Detail view is handled inside IterateFeedback
   }, []);
 
-  const handleRefineFeedback = useCallback((id: string, newRationale: string, thread: { role: string; text: string }[]) => {
+  const handleRefineFeedback = useCallback((id: string, newRationale: string, thread: { role: "user" | "assistant"; text: string }[]) => {
     if (!activeProjectId) return;
     setProjectFeedback((prev) => ({
       ...prev,
