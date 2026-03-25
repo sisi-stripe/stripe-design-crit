@@ -59,6 +59,7 @@ export interface Feedback {
   approved?: boolean; // true = implement, false = dismissed, undefined = pending
   rationale?: string;
   figmaNote?: string;
+  bbox?: { x: number; y: number; width: number; height: number }; // normalized 0–1 image coords
   conversationThread?: ConversationMessage[];
   isRefining?: boolean; // loading state during Claude refinement
 }

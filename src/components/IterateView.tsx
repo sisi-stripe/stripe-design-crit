@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Feedback, LevelOfConcern } from "@/types";
+import { EXAMPLE_PROJECT_ID, EXAMPLE_PROJECT_TITLE, exampleFeedback } from "@/data/exampleIterateFeedback";
 import IterateSidebar from "./IterateSidebar";
 import ImageCanvas from "./ImageCanvas";
 import IterateFeedback from "./IterateFeedback";
@@ -23,6 +24,46 @@ export default function IterateView({ onBack }: IterateViewProps) {
   const [projectFeedback, setProjectFeedback] = useState<Record<string, Feedback[]>>({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [hoveredBbox, setHoveredBbox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [feedbackWidth, setFeedbackWidth] = useState(320);
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    dragStateRef.current = { startX: e.clientX, startWidth: feedbackWidth };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragStateRef.current) return;
+      const delta = dragStateRef.current.startX - e.clientX;
+      const newWidth = Math.max(240, Math.min(600, dragStateRef.current.startWidth + delta));
+      setFeedbackWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      dragStateRef.current = null;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [feedbackWidth]);
+
+  // Preload example project on mount
+  useEffect(() => {
+    fetch("/Dashboard.png")
+      .then((r) => r.blob())
+      .then((blob) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          setProjects([{ id: EXAMPLE_PROJECT_ID, title: EXAMPLE_PROJECT_TITLE, imageDataUrl: dataUrl, imageMediaType: "image/png" }]);
+          setProjectFeedback({ [EXAMPLE_PROJECT_ID]: exampleFeedback });
+          setActiveProjectId(EXAMPLE_PROJECT_ID);
+        };
+        reader.readAsDataURL(blob);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const activeFeedback = activeProjectId ? (projectFeedback[activeProjectId] ?? []) : [];
@@ -49,7 +90,7 @@ export default function IterateView({ onBack }: IterateViewProps) {
         }
 
         const newItems: Feedback[] = data.items.map(
-          (item: { level: LevelOfConcern; text: string; rationale: string; figmaNote: string }) => ({
+          (item: { level: LevelOfConcern; text: string; rationale: string; figmaNote: string; bbox?: { x: number; y: number; width: number; height: number } }) => ({
             id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             sessionId: "",
             reviewerName: "Taste (AI)",
@@ -57,6 +98,7 @@ export default function IterateView({ onBack }: IterateViewProps) {
             text: item.text,
             rationale: item.rationale,
             figmaNote: item.figmaNote,
+            bbox: item.bbox,
             timestamp: "Just now",
             upvotes: 0,
             source: "ai" as const,
@@ -129,8 +171,32 @@ export default function IterateView({ onBack }: IterateViewProps) {
     generateCritique(activeProject.imageDataUrl, activeProject.title, activeProject.id);
   }, [activeProject, generateCritique]);
 
+  const handleResolve = useCallback((id: string) => {
+    if (!activeProjectId) return;
+    setProjectFeedback((prev) => ({
+      ...prev,
+      [activeProjectId]: (prev[activeProjectId] ?? []).map((f) =>
+        f.id === id ? { ...f, approved: true } : f
+      ),
+    }));
+  }, [activeProjectId]);
+
+  const handleIterate = useCallback((_id: string) => {
+    // Detail view is handled inside IterateFeedback
+  }, []);
+
+  const handleRefineFeedback = useCallback((id: string, newRationale: string, thread: { role: string; text: string }[]) => {
+    if (!activeProjectId) return;
+    setProjectFeedback((prev) => ({
+      ...prev,
+      [activeProjectId]: (prev[activeProjectId] ?? []).map((f) =>
+        f.id === id ? { ...f, rationale: newRationale, conversationThread: thread } : f
+      ),
+    }));
+  }, [activeProjectId]);
+
   return (
-    <div className="flex h-screen overflow-hidden p-3 gap-3" style={{ background: "#F2F2F2" }}>
+    <div className="flex h-screen overflow-hidden p-3 gap-3 select-none" style={{ background: "#F2F2F2" }}>
       <IterateSidebar
         projects={projects}
         activeProjectId={activeProjectId}
@@ -139,12 +205,24 @@ export default function IterateView({ onBack }: IterateViewProps) {
         onBack={onBack}
       />
 
-      <ImageCanvas
-        imageDataUrl={activeProject?.imageDataUrl}
-        projectTitle={activeProject?.title}
-        onImageDrop={handleImageDrop}
-        onImageClear={handleImageClear}
-      />
+      <div className="flex-1 min-w-0 h-full">
+        <ImageCanvas
+          imageDataUrl={activeProject?.imageDataUrl}
+          projectTitle={activeProject?.title}
+          onImageDrop={handleImageDrop}
+          onImageClear={handleImageClear}
+          highlightBbox={hoveredBbox}
+        />
+      </div>
+
+      {/* Drag handle */}
+      <div
+        onMouseDown={handleDragStart}
+        className="flex-shrink-0 flex items-center justify-center cursor-col-resize self-stretch group"
+        style={{ width: "12px" }}
+      >
+        <div className="w-[3px] h-8 rounded-full bg-gray-200 group-hover:bg-indigo-400 group-active:bg-indigo-500 transition-colors" />
+      </div>
 
       <IterateFeedback
         feedback={activeFeedback}
@@ -152,6 +230,11 @@ export default function IterateView({ onBack }: IterateViewProps) {
         isGenerating={isGenerating}
         error={generateError}
         onRegenerate={handleRegenerate}
+        onHoverFeedback={setHoveredBbox}
+        onResolve={handleResolve}
+        onIterate={handleIterate}
+        onRefineFeedback={handleRefineFeedback}
+        width={feedbackWidth}
       />
     </div>
   );

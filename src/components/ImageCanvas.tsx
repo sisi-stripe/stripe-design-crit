@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+
+interface Bbox { x: number; y: number; width: number; height: number }
 
 interface ImageCanvasProps {
   imageDataUrl?: string;
   projectTitle?: string;
   onImageDrop: (dataUrl: string, mediaType: string) => void;
   onImageClear: () => void;
+  highlightBbox?: Bbox | null;
 }
 
 export default function ImageCanvas({
@@ -14,9 +17,61 @@ export default function ImageCanvas({
   projectTitle,
   onImageDrop,
   onImageClear,
+  highlightBbox,
 }: ImageCanvasProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties | null>(null);
+
+  const computeHighlight = useCallback(() => {
+    if (!highlightBbox || !imgRef.current || !containerRef.current) {
+      setHighlightStyle(null);
+      return;
+    }
+    const img = imgRef.current;
+    const container = containerRef.current;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const { naturalWidth: nw, naturalHeight: nh } = img;
+    // Subtract padding (24px each side) to get the content box where object-contain renders
+    const padding = 24;
+    const elW = img.clientWidth - padding * 2;
+    const elH = img.clientHeight - padding * 2;
+    const naturalRatio = nw / nh;
+    const elRatio = elW / elH;
+
+    let renderW: number, renderH: number, renderX: number, renderY: number;
+    // Offset into the content box (past the padding)
+    const contentLeft = imgRect.left - containerRect.left + padding;
+    const contentTop = imgRect.top - containerRect.top + padding;
+
+    if (naturalRatio > elRatio) {
+      renderW = elW;
+      renderH = elW / naturalRatio;
+      renderX = contentLeft;
+      renderY = contentTop + (elH - renderH) / 2;
+    } else {
+      renderH = elH;
+      renderW = elH * naturalRatio;
+      renderX = contentLeft + (elW - renderW) / 2;
+      renderY = contentTop;
+    }
+
+    setHighlightStyle({
+      left: renderX + highlightBbox.x * renderW,
+      top: renderY + highlightBbox.y * renderH,
+      width: highlightBbox.width * renderW,
+      height: highlightBbox.height * renderH,
+    });
+  }, [highlightBbox]);
+
+  useEffect(() => {
+    computeHighlight();
+  }, [computeHighlight]);
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -54,10 +109,10 @@ export default function ImageCanvas({
 
   return (
     <div
+      ref={containerRef}
       className="relative flex items-center justify-center h-full rounded-xl bg-white overflow-hidden"
       style={{
-        width: "728px",
-        flexShrink: 0,
+        width: "100%",
         boxShadow: "0 4px 16px 0 rgba(0,0,0,0.04)",
       }}
       onDragOver={handleDragOver}
@@ -77,11 +132,30 @@ export default function ImageCanvas({
           {/* Image display */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={imgRef}
             src={imageDataUrl}
             alt="Design for critique"
             className="max-w-full max-h-full object-contain"
             style={{ padding: "24px" }}
+            onLoad={computeHighlight}
           />
+
+          {/* Hover highlight overlay */}
+          {highlightStyle && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                ...highlightStyle,
+                borderRadius: "3px",
+                border: "1.5px solid #675dff",
+                background: "rgba(103, 93, 255, 0.06)",
+                outline: "1px solid rgba(103, 93, 255, 0.2)",
+                outlineOffset: "2px",
+                boxShadow: "0 0 0 2000px rgba(0, 0, 0, 0.18)",
+                transition: "left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease",
+              }}
+            />
+          )}
 
           {/* Project title pill */}
           {projectTitle && (

@@ -23,17 +23,20 @@ Your job is to review designs and provide structured, actionable critique using 
 
 When critiquing, be specific and actionable. Reference the principles. Be direct — this is internal critique between designers, not client communication.`;
 
-const CRITIQUE_PROMPT = `Generate 4–6 taste critique items for this design. Return ONLY a raw JSON array — no markdown, no code fences, no explanation. Format:
+const CRITIQUE_PROMPT = `Generate 4–6 taste critique items for this design. Include at least one "kudos" item that calls out a genuine design strength. Return ONLY a raw JSON array — no markdown, no code fences, no explanation. Format:
 [
   {
     "level": "kudos|question|consider|blocking",
     "text": "specific, actionable critique (1–2 sentences)",
     "rationale": "why this matters per taste principles (1 sentence)",
-    "figmaNote": "short version for Figma comment, under 120 chars"
+    "figmaNote": "short version for Figma comment, under 120 chars",
+    "bbox": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }
   }
 ]
 
-Focus on taste-specific issues: activation-state calibration, earned white space, icon clarity, gradient/overlay treatment, visual boundaries, purposeful density, Sail UI alignment. Skip generic UX issues unless they directly relate to these principles.`;
+The bbox field uses normalized coordinates (0–1) relative to image dimensions, identifying the specific region the feedback refers to. Use a tight bounding box when feedback targets a specific element; use full image (x:0, y:0, width:1, height:1) for holistic feedback.
+
+Focus on taste-specific issues: activation-state calibration, earned white space, icon clarity, gradient/overlay treatment, visual boundaries, purposeful density, Sail UI alignment. Kudos should call out genuine design strengths using the same taste lens.`;
 
 export async function POST(request: NextRequest) {
   try {

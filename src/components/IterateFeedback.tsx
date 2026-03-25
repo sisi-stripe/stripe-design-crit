@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Feedback, LEVEL_CONFIG } from "@/types";
 import FeedbackCard from "./FeedbackCard";
 
@@ -9,6 +10,11 @@ interface IterateFeedbackProps {
   isGenerating: boolean;
   error: string | null;
   onRegenerate: () => void;
+  onHoverFeedback?: (bbox: { x: number; y: number; width: number; height: number } | null) => void;
+  onResolve?: (id: string) => void;
+  onIterate?: (id: string) => void;
+  onRefineFeedback?: (id: string, newRationale: string, thread: { role: string; text: string }[]) => void;
+  width?: number;
 }
 
 export default function IterateFeedback({
@@ -17,13 +23,161 @@ export default function IterateFeedback({
   isGenerating,
   error,
   onRegenerate,
+  onHoverFeedback,
+  onResolve,
+  onIterate,
+  onRefineFeedback,
+  width,
 }: IterateFeedbackProps) {
   const hasFeedback = feedback.length > 0;
+  const [iteratingId, setIteratingId] = useState<string | null>(null);
+  const [iterationText, setIterationText] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+
+  const handleSubmitIteration = async () => {
+    if (!iterationText.trim() || !iteratingItem || isRefining) return;
+    setIsRefining(true);
+    const existingThread = iteratingItem.conversationThread ?? [];
+    const conversationHistory = existingThread.length > 0
+      ? existingThread
+      : [{ role: "assistant", text: `${iteratingItem.text}${iteratingItem.rationale ? `\n\nSuggested change: ${iteratingItem.rationale}` : ""}` }];
+    try {
+      const res = await fetch("/api/taste", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationHistory, userReply: iterationText }),
+      });
+      const data = await res.json();
+      if (res.ok && data.text) {
+        const newThread = [
+          ...conversationHistory,
+          { role: "user", text: iterationText },
+          { role: "assistant", text: data.text },
+        ];
+        onRefineFeedback?.(iteratingItem.id, data.text, newThread);
+        setIterationText("");
+      }
+    } catch {
+      // silent — leave text so user can retry
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  const iteratingItem = iteratingId ? feedback.find((f) => f.id === iteratingId) ?? null : null;
+  const iteratingIndex = iteratingId ? feedback.findIndex((f) => f.id === iteratingId) : -1;
+
+  // Iterate detail view
+  if (iteratingItem) {
+    const config = LEVEL_CONFIG[iteratingItem.level];
+    return (
+      <aside
+        className="flex flex-col h-full rounded-xl bg-white overflow-hidden flex-shrink-0"
+        style={{ boxShadow: "0 4px 16px 0 rgba(0,0,0,0.04)", width: width ?? 320 }}
+      >
+        {/* Header */}
+        <div
+          className="px-4 h-[50px] flex items-center justify-between flex-shrink-0"
+          style={{ borderBottom: "1px solid #D4DEE9" }}
+        >
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setIteratingId(null); setIterationText(""); }}
+              className="text-gray-500 hover:text-gray-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span
+              className="text-[15px] font-semibold text-black"
+              style={{ fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif' }}
+            >
+              Feedback {iteratingIndex + 1}
+            </span>
+          </div>
+          <span
+            className={`inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[4px] text-[12px] font-medium border ${config.bg} ${config.color} ${config.border}`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+            {config.label}
+          </span>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-3 flex flex-col gap-2" style={{ borderBottom: "1px solid #D4DEE9" }}>
+            {/* Feedback text */}
+            <p className="text-[12px] text-[#364153] leading-[16px]">
+              {iteratingItem.text}
+            </p>
+
+            {/* Suggested Change box */}
+            {iteratingItem.rationale && (
+              <div className="flex flex-col gap-2 p-2 rounded-[4px]" style={{ background: "#F4F7FA" }}>
+                <div className="flex flex-col gap-1">
+                  <p className="text-[12px] font-semibold text-black leading-[16px] tracking-[-0.024px]">
+                    Suggested Change
+                  </p>
+                  <p className="text-[12px] text-black leading-[16px]">
+                    {iteratingItem.rationale}
+                  </p>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => { onResolve?.(iteratingItem.id); setIteratingId(null); }}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-[4px] text-[12px] font-semibold text-white hover:opacity-90 active:scale-[0.98] transition-opacity"
+                    style={{ background: "#19273C" }}
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Implement
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Text area */}
+            <div className="relative rounded-[4px] overflow-hidden" style={{ border: "1px solid #432dd7", height: "108px" }}>
+              <textarea
+                value={iterationText}
+                onChange={(e) => setIterationText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmitIteration(); }}
+                placeholder="Describe your iteration or response..."
+                className="w-full h-full resize-none p-2 pb-10 text-[12px] text-[#364153] leading-[18px] outline-none placeholder:text-[rgba(54,65,83,0.5)] bg-white"
+                disabled={isRefining}
+              />
+              <div className="absolute bottom-1.5 right-1.5">
+                <button
+                  onClick={handleSubmitIteration}
+                  disabled={!iterationText.trim() || isRefining}
+                  className="w-7 h-7 rounded-[4px] flex items-center justify-center transition-opacity disabled:opacity-40"
+                  style={{ background: "#F7F5FD" }}
+                >
+                  {isRefining ? (
+                    <svg className="w-3.5 h-3.5 text-[#675DFF] animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5 text-[#675DFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside
-      className="flex-1 flex flex-col h-full rounded-xl bg-white overflow-hidden"
-      style={{ boxShadow: "0 4px 16px 0 rgba(0,0,0,0.04)" }}
+      className="flex flex-col h-full rounded-xl bg-white overflow-hidden flex-shrink-0"
+      style={{ boxShadow: "0 4px 16px 0 rgba(0,0,0,0.04)", width: width ?? 320 }}
     >
       {/* Header */}
       <div
@@ -99,6 +253,11 @@ export default function IterateFeedback({
                 key={fb.id}
                 feedback={fb}
                 onUpvote={() => {}}
+                variant="iterate"
+                onHover={() => onHoverFeedback?.(fb.bbox ?? null)}
+                onHoverEnd={() => onHoverFeedback?.(null)}
+                onResolve={onResolve}
+                onIterate={(id) => { onIterate?.(id); setIteratingId(id); }}
               />
             ))}
             {/* Level breakdown */}
