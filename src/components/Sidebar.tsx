@@ -180,10 +180,18 @@ function SessionGroup({
           const computedStatus = getSessionStatus(session.date);
           const style = STATUS_STYLES[computedStatus];
           return (
-            <button
+            <div
               key={session.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelectSession(session.id)}
-              className={`w-full text-left rounded-lg px-3 py-2.5 transition-all duration-150 group ${
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectSession(session.id);
+                }
+              }}
+              className={`w-full text-left rounded-lg px-3 py-2.5 transition-all duration-150 group cursor-pointer ${
                 isActive
                   ? "bg-white"
                   : "hover:bg-white/60"
@@ -229,7 +237,7 @@ function SessionGroup({
                 <span style={{ color: "#C4CBD8" }}>&middot;</span>
                 <span>{session.durationMinutes} mins</span>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>

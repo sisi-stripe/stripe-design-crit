@@ -148,6 +148,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "Love the simplified transfer form — reducing steps from 6 to 3 is a huge win for completion rates. The progressive disclosure pattern works beautifully here.",
       timestamp: "2 min ago",
       upvotes: 5,
+      figmaNodeId: "1138-267280",
     },
     {
       id: "f2",
@@ -157,6 +158,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "The error states are missing for recipient validation. We need inline validation feedback before submission — this was a top complaint in the last usability study.",
       timestamp: "5 min ago",
       upvotes: 8,
+      figmaNodeId: "1138-267310",
     },
     {
       id: "f3",
@@ -166,6 +168,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "How does this flow handle saved recipients for returning users? The current design seems to assume first-time transfers only.",
       timestamp: "8 min ago",
       upvotes: 3,
+      figmaNodeId: "278-216933",
     },
     {
       id: "f4",
@@ -175,6 +178,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "Could we add a micro-animation when the transfer is processing? Something like the Stripe loading spinner but themed to our brand. Would add polish.",
       timestamp: "12 min ago",
       upvotes: 6,
+      figmaNodeId: "1035-42597",
     },
     {
       id: "f5",
@@ -184,6 +188,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "The CTA button text says 'Send now' but our voice guidelines recommend 'Confirm transfer'. Small thing but worth aligning.",
       timestamp: "15 min ago",
       upvotes: 2,
+      figmaNodeId: "1138-267400",
     },
     {
       id: "f6",
@@ -193,6 +198,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "The spacing and typography hierarchy is excellent. Very readable, scannable layout. Nice use of the 4px grid.",
       timestamp: "18 min ago",
       upvotes: 4,
+      figmaNodeId: "278-217000",
     },
     {
       id: "f7",
@@ -202,6 +208,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "Accessibility concern: the contrast ratio on the secondary text (#999 on white) fails WCAG AA. Needs to be at least #767676.",
       timestamp: "22 min ago",
       upvotes: 7,
+      figmaNodeId: "1035-42700",
     },
     {
       id: "f8",
@@ -211,6 +218,7 @@ export const feedbackBySession: Record<string, Feedback[]> = {
       text: "What if we showed a live transfer summary on the right side that updates as users fill in the form? Similar to what we did in the payout flow.",
       timestamp: "25 min ago",
       upvotes: 9,
+      figmaNodeId: "1138-267500",
     },
   ],
   s3: [
