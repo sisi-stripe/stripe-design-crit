@@ -39,6 +39,11 @@ export const CRIT_CATEGORIES: { key: CritChannel["category"]; label: string }[] 
   { key: "global", label: "Global Crit" },
 ];
 
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  text: string;
+}
+
 export interface Feedback {
   id: string;
   sessionId: string;
@@ -48,6 +53,14 @@ export interface Feedback {
   timestamp: string;
   upvotes: number;
   screenshotUrl?: string;
+  figmaNodeId?: string;
+  // AI-generated fields
+  source?: "human" | "ai";
+  approved?: boolean; // true = implement, false = dismissed, undefined = pending
+  rationale?: string;
+  figmaNote?: string;
+  conversationThread?: ConversationMessage[];
+  isRefining?: boolean; // loading state during Claude refinement
 }
 
 export interface ActionItem {

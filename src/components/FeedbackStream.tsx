@@ -24,6 +24,8 @@ interface FeedbackStreamProps {
     screenshotUrl?: string;
   }) => void;
   sessionTitle: string;
+  selectedFeedbackId?: string | null;
+  onSelectFeedback?: (id: string | null) => void;
 }
 
 export default function FeedbackStream({
@@ -32,6 +34,8 @@ export default function FeedbackStream({
   onUpvote,
   onSubmit,
   sessionTitle,
+  selectedFeedbackId,
+  onSelectFeedback,
 }: FeedbackStreamProps) {
   const [sortMode, setSortMode] = useState<SortMode>("latest");
 
@@ -63,9 +67,11 @@ export default function FeedbackStream({
       <div className="px-4 py-3" style={{ borderBottom: "1px solid #ECEEF1" }}>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-[15px] font-semibold text-gray-900">Feedback</h2>
-          <span className="text-[12px] font-medium" style={{ color: "#7D8BA4" }}>
-            {feedback.length} {feedback.length === 1 ? "item" : "items"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-medium" style={{ color: "#7D8BA4" }}>
+              {feedback.length} {feedback.length === 1 ? "item" : "items"}
+            </span>
+          </div>
         </div>
 
         {/* Sort controls */}
@@ -117,7 +123,13 @@ export default function FeedbackStream({
           </div>
         ) : (
           sorted.map((fb) => (
-            <FeedbackCard key={fb.id} feedback={fb} onUpvote={onUpvote} />
+            <FeedbackCard
+              key={fb.id}
+              feedback={fb}
+              onUpvote={onUpvote}
+              isSelected={fb.id === selectedFeedbackId}
+              onSelect={onSelectFeedback}
+            />
           ))
         )}
       </div>

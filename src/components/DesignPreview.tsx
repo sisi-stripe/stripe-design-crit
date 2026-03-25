@@ -1,8 +1,20 @@
 "use client";
 
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback } from "react";
 import { Session } from "@/types";
 type PreviewTab = "figma" | "prototype" | "slides";
+
+function buildNodeUrl(embedUrl: string, nodeId: string): string {
+  const match = embedUrl.match(/url=([^&]+)/);
+  if (!match) return embedUrl;
+  try {
+    const innerUrl = new URL(decodeURIComponent(match[1]));
+    innerUrl.searchParams.set("node-id", nodeId);
+    return `https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(innerUrl.toString())}`;
+  } catch {
+    return embedUrl;
+  }
+}
 
 const TABS: { key: PreviewTab; label: string; iconSrc: string }[] = [
   {
@@ -25,11 +37,15 @@ const TABS: { key: PreviewTab; label: string; iconSrc: string }[] = [
 interface DesignPreviewProps {
   session: Session;
   isClosed: boolean;
+  highlightNodeId?: string | null;
+  onClearHighlight?: () => void;
 }
 
 export default function DesignPreview({
   session,
   isClosed,
+  highlightNodeId,
+  onClearHighlight,
 }: DesignPreviewProps) {
   const [activeTab, setActiveTab] = useState<PreviewTab>("figma");
   const [isLoading, setIsLoading] = useState(true);
@@ -38,14 +54,16 @@ export default function DesignPreview({
     (tab: PreviewTab) => {
       switch (tab) {
         case "figma":
-          return session.figmaUrl;
+          return highlightNodeId
+            ? buildNodeUrl(session.figmaUrl, highlightNodeId)
+            : session.figmaUrl;
         case "prototype":
           return session.prototypeUrl;
         case "slides":
           return session.slidesUrl;
       }
     },
-    [session]
+    [session, highlightNodeId]
   );
 
   const handleTabChange = (tab: PreviewTab) => {
@@ -97,6 +115,17 @@ export default function DesignPreview({
           })}
         </div>
 
+        {highlightNodeId && activeTab === "figma" && (
+          <button
+            onClick={onClearHighlight}
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-md px-2.5 py-1 hover:bg-indigo-100 transition-colors"
+          >
+            Viewing feedback context
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         <a
           href={currentUrl}
           target="_blank"
@@ -148,8 +177,8 @@ export default function DesignPreview({
           </div>
         )}
         <iframe
-          key={`${session.id}-${activeTab}`}
-          src={currentUrl}
+          key={`${session.id}-${activeTab}-${highlightNodeId ?? ""}`}
+          src={currentUrl || undefined}
           className="w-full h-full border-0"
           onLoad={() => setIsLoading(false)}
           allow="fullscreen"
