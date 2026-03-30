@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stripe Design Crit Tool
 
-## Getting Started
+A little app for running design crits and iterating on designs — with an AI taste critic built in, trained on Stripe's design principles.
 
-First, run the development server:
+**Two modes:**
+- **Team Design Critique** — run a structured crit session, collect feedback from reviewers, and get AI taste notes alongside human ones
+- **Iterate** — drop a design, get AI feedback, push back on it, refine
+
+---
+
+## Setup (takes about 2 minutes)
+
+**Prerequisites:** Node.js and Claude Code installed. That's it. No API keys needed.
 
 ```bash
+git clone https://github.com/sisi-stripe/stripe-design-crit.git
+cd stripe-design-crit
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and you're in.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> The AI critique runs through your local Claude Code session — no separate API key or account needed. If you have Claude Code, you're good.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## How the AI critic works
 
-To learn more about Next.js, take a look at the following resources:
+The AI is trained on Stripe's taste principles — activation-state calibration, earned white space, purposeful density, Sail UI alignment, overlay/gradient rules, icon clarity, and functional motion. It gives you 4–6 critique items per design, with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Kudos** — what's genuinely working
+- **Questions** — things worth thinking about
+- **Consider** — directional suggestions
+- **Blocking** — stuff that needs to change
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can drop in a Figma URL or drag a screenshot directly onto the canvas. Either way it'll give you something to react to.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Figma integration
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Add your Figma access token to a `.env.local` file in the project root:
+
+```
+FIGMA_ACCESS_TOKEN=your_token_here
+```
+
+Get a token at figma.com → Settings → Personal access tokens. Without it, the Figma preview won't load but everything else still works.
+
+---
+
+## Questions / bugs
+
+Ping @sisi in Slack or open an issue on the repo.
