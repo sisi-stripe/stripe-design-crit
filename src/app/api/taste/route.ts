@@ -1,7 +1,50 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { spawn } from "child_process";
 import { NextRequest, NextResponse } from "next/server";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
+
+function callClaude(systemPrompt: string, content: string | ContentBlock[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-p",
+      "--input-format", "stream-json",
+      "--output-format", "stream-json",
+      "--verbose",
+      "--no-session-persistence",
+      "--system-prompt", systemPrompt,
+      "--model", "claude-sonnet-4-6",
+    ];
+
+    const child = spawn("claude", args);
+    const message = { type: "user", message: { role: "user", content } };
+    child.stdin.write(JSON.stringify(message) + "\n");
+    child.stdin.end();
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+    child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+    child.on("close", (code: number) => {
+      if (code !== 0) {
+        reject(new Error(`Claude CLI exited ${code}: ${stderr}`));
+        return;
+      }
+      for (const line of stdout.split("\n")) {
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.type === "result" && parsed.subtype === "success") {
+            resolve(parsed.result);
+            return;
+          }
+        } catch { /* skip non-JSON lines */ }
+      }
+      reject(new Error("No result found in Claude CLI output"));
+    });
+  });
+}
 
 const TASTE_SYSTEM_PROMPT = `You are a design critic applying Stripe's taste principles, informed by Yuliya's design philosophy for the Stripe Dashboard.
 
@@ -38,6 +81,15 @@ The bbox field uses normalized coordinates (0–1) relative to image dimensions,
 
 Focus on taste-specific issues: activation-state calibration, earned white space, icon clarity, gradient/overlay treatment, visual boundaries, purposeful density, Sail UI alignment. Kudos should call out genuine design strengths using the same taste lens.`;
 
+function extractJsonArray(raw: string): unknown[] {
+  // Strip markdown code fences then find the first JSON array in the response
+  const stripped = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+  const start = stripped.indexOf("[");
+  const end = stripped.lastIndexOf("]");
+  if (start === -1 || end === -1) throw new Error("No JSON array found");
+  return JSON.parse(stripped.slice(start, end + 1));
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -45,25 +97,17 @@ export async function POST(request: NextRequest) {
 
     // Refinement mode: user replied to an AI suggestion
     if (conversationHistory && userReply) {
-      const messages: Anthropic.MessageParam[] = [
-        ...conversationHistory.map((m: { role: string; text: string }) => ({
-          role: m.role as "user" | "assistant",
-          content: m.text,
-        })),
-        { role: "user", content: userReply },
-      ];
+      // Flatten conversation history into the prompt since CLI is single-turn
+      const historyText = (conversationHistory as { role: string; text: string }[])
+        .map((m) => `${m.role === "user" ? "Designer" : "Critic"}: ${m.text}`)
+        .join("\n\n");
+      const prompt = `${historyText}\n\nDesigner: ${userReply}`;
 
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 512,
-        system:
-          TASTE_SYSTEM_PROMPT +
-          "\n\nYou are in a back-and-forth conversation refining a single design critique item. The designer has responded to your suggestion with context. Acknowledge what they said, adjust your recommendation if their context changes your assessment, and give a refined take. Be conversational and concise (2–4 sentences). Do not return JSON — reply naturally.",
-        messages,
-      });
+      const refinementSystem =
+        TASTE_SYSTEM_PROMPT +
+        "\n\nYou are in a back-and-forth conversation refining a single design critique item. The designer has responded to your suggestion with context. Acknowledge what they said, adjust your recommendation if their context changes your assessment, and give a refined take. Be conversational and concise (2–4 sentences). Do not return JSON — reply naturally.";
 
-      const text =
-        response.content[0].type === "text" ? response.content[0].text : "";
+      const text = await callClaude(refinementSystem, prompt);
       return NextResponse.json({ type: "refinement", text });
     }
 
@@ -78,32 +122,13 @@ export async function POST(request: NextRequest) {
         ? imageBase64.split(",")[1]
         : imageBase64;
 
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        system: TASTE_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: mediaType, data: base64Data },
-              },
-              {
-                type: "text",
-                text: `Design title: "${sessionTitle || "Untitled"}"\n\n${CRITIQUE_PROMPT}`,
-              },
-            ],
-          },
-        ],
-      });
-
-      const raw = response.content[0].type === "text" ? response.content[0].text : "[]";
+      const raw = await callClaude(TASTE_SYSTEM_PROMPT, [
+        { type: "image", source: { type: "base64", media_type: mediaType, data: base64Data } },
+        { type: "text", text: `Design title: "${sessionTitle || "Untitled"}"\n\n${CRITIQUE_PROMPT}` },
+      ]);
       let items;
       try {
-        const cleaned = raw.replace(/^```json\s*/m, "").replace(/^```\s*/m, "").replace(/```\s*$/m, "").trim();
-        items = JSON.parse(cleaned);
+        items = extractJsonArray(raw);
       } catch {
         return NextResponse.json({ error: "Failed to parse AI response", raw }, { status: 500 });
       }
@@ -126,24 +151,11 @@ export async function POST(request: NextRequest) {
 
     lines.push(`\n${CRITIQUE_PROMPT}`);
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      system: TASTE_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: lines.join("\n") }],
-    });
-
-    const raw =
-      response.content[0].type === "text" ? response.content[0].text : "[]";
+    const raw = await callClaude(TASTE_SYSTEM_PROMPT, lines.join("\n"));
 
     let items;
     try {
-      const cleaned = raw
-        .replace(/^```json\s*/m, "")
-        .replace(/^```\s*/m, "")
-        .replace(/```\s*$/m, "")
-        .trim();
-      items = JSON.parse(cleaned);
+      items = extractJsonArray(raw);
     } catch {
       return NextResponse.json(
         { error: "Failed to parse AI response", raw },
