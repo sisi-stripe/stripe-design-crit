@@ -6,9 +6,14 @@ const SYSTEM_PROMPT = `You are implementing design improvements to a Stripe Dash
 You will receive a design (a Figma URL and/or a screenshot) and a list of specific feedback items to implement.
 
 Your steps:
-1. If a Figma URL is provided, use figma_get_design_context to understand the current file structure, then use use_figma to make precise, targeted changes for each feedback item.
-2. If only a screenshot is provided (no Figma URL), use figma_create_new_file to create a new file, then use use_figma to recreate the design with the improvements already applied.
-3. When complete, output the Figma URL on its own line in this exact format: FIGMA_URL: <url>
+1. If a Figma URL is provided:
+   - Use figma_get_design_context to identify the target frame(s) and the file key.
+   - Use use_figma to duplicate the target frame within the same file, placing the copy next to the original. Name the duplicate "[original name] — Iterated".
+     IMPORTANT: Your use_figma code must return the new node's ID so you can build a deep link. End the JS code with: return { nodeId: clone.id, fileKey: figma.fileKey };
+   - Make all changes on the duplicate only. Never modify the original frame.
+   - Build the direct URL to the duplicate using the returned nodeId, formatting it as: https://www.figma.com/design/FILE_KEY/file?node-id=NODE_ID (replace / with - in the node ID).
+2. If only a screenshot is provided (no Figma URL), use figma_create_new_file to create a new file, then use use_figma to recreate the design with the improvements already applied. Return the new file URL.
+3. When complete, output the direct URL to the duplicated/new frame on its own line in this exact format: FIGMA_URL: <url>
 
 Be surgical — implement only what is specified. Do not redesign or introduce unrequested changes.`;
 
@@ -60,6 +65,7 @@ export async function POST(request: NextRequest) {
         "--output-format", "stream-json",
         "--verbose",
         "--no-session-persistence",
+        "--permission-mode", "bypassPermissions",
         "--system-prompt", SYSTEM_PROMPT,
         "--model", "claude-sonnet-4-6",
       ];
@@ -69,6 +75,7 @@ export async function POST(request: NextRequest) {
       child.stdin.end();
 
       let buffer = "";
+      let foundFigmaUrl: string | null = null;
 
       child.stdout.on("data", (chunk: Buffer) => {
         buffer += chunk.toString();
@@ -84,9 +91,13 @@ export async function POST(request: NextRequest) {
               for (const block of parsed.message.content) {
                 if (block.type === "text" && block.text?.trim()) {
                   controller.enqueue(sseChunk({ type: "progress", text: block.text }));
+                  // Capture FIGMA_URL from text as Claude streams it
                   const urlMatch = (block.text as string).match(/FIGMA_URL:\s*(https:\/\/[^\s]+)/);
-                  if (urlMatch) {
-                    controller.enqueue(sseChunk({ type: "complete", figmaUrl: urlMatch[1] }));
+                  if (urlMatch) foundFigmaUrl = urlMatch[1];
+                  // Also catch any bare figma.com URL if no explicit marker
+                  if (!foundFigmaUrl) {
+                    const bareMatch = (block.text as string).match(/https:\/\/(?:www\.)?figma\.com\/design\/[^\s)>\n]+node-id[^\s)>\n]+/);
+                    if (bareMatch) foundFigmaUrl = bareMatch[0];
                   }
                 } else if (block.type === "tool_use" && block.name) {
                   const label = (block.name as string)
@@ -98,9 +109,15 @@ export async function POST(request: NextRequest) {
             }
 
             if (parsed.type === "result" && parsed.subtype === "success") {
-              const result: string = parsed.result ?? "";
-              const urlMatch = result.match(/https:\/\/(?:www\.)?figma\.com\/[^\s)>\n]+/);
-              controller.enqueue(sseChunk({ type: "complete", figmaUrl: urlMatch?.[0] ?? null }));
+              // Try result text as fallback if we didn't find a URL in streaming text
+              if (!foundFigmaUrl) {
+                const result: string = parsed.result ?? "";
+                const urlMatch = result.match(/https:\/\/(?:www\.)?figma\.com\/[^\s)>\n]+/);
+                if (urlMatch) foundFigmaUrl = urlMatch[0];
+              }
+              console.log("[implement] result:", parsed.result);
+              console.log("[implement] foundFigmaUrl:", foundFigmaUrl);
+              controller.enqueue(sseChunk({ type: "complete", figmaUrl: foundFigmaUrl, resultText: parsed.result ?? "" }));
               try { controller.close(); } catch { /* already closed */ }
             }
           } catch { /* skip non-JSON lines */ }

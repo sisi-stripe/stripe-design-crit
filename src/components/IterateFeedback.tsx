@@ -44,6 +44,7 @@ export default function IterateFeedback({
   const [implementState, setImplementState] = useState<"idle" | "implementing" | "done" | "error">("idle");
   const [implementSteps, setImplementSteps] = useState<string[]>([]);
   const [implementFigmaUrl, setImplementFigmaUrl] = useState<string | null>(null);
+  const [implementResultText, setImplementResultText] = useState<string>("");
 
   const handleSubmitIteration = async () => {
     if (!iterationText.trim() || !iteratingItem || isRefining) return;
@@ -108,6 +109,7 @@ export default function IterateFeedback({
               setImplementSteps((prev) => [...prev, event.label]);
             } else if (event.type === "complete") {
               setImplementFigmaUrl(event.figmaUrl ?? null);
+              setImplementResultText(event.resultText ?? "");
               setImplementState("done");
               onResolve?.(item.id);
             } else if (event.type === "error") {
@@ -139,7 +141,7 @@ export default function IterateFeedback({
         >
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setIteratingId(null); setIterationText(""); setImplementState("idle"); setImplementSteps([]); setImplementFigmaUrl(null); }}
+              onClick={() => { setIteratingId(null); setIterationText(""); setImplementState("idle"); setImplementSteps([]); setImplementFigmaUrl(null); setImplementResultText(""); }}
               className="text-gray-500 hover:text-gray-800 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -199,26 +201,31 @@ export default function IterateFeedback({
 
                 {/* Done state */}
                 {implementState === "done" && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 text-[11px] text-emerald-600">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Done
-                    </div>
-                    {implementFigmaUrl && (
-                      <a
-                        href={implementFigmaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[11px] font-semibold text-white hover:opacity-90 transition-opacity"
-                        style={{ background: "#19273C" }}
-                      >
-                        View in Figma
-                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-[11px] text-emerald-600">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                      </a>
+                        Done
+                      </div>
+                      {implementFigmaUrl && (
+                        <a
+                          href={implementFigmaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[11px] font-semibold text-white hover:opacity-90 transition-opacity"
+                          style={{ background: "#19273C" }}
+                        >
+                          Open iterated frame
+                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                    {!implementFigmaUrl && implementResultText && (
+                      <p className="text-[10px] text-gray-400 leading-relaxed">{implementResultText}</p>
                     )}
                   </div>
                 )}
