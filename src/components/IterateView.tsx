@@ -13,6 +13,7 @@ interface IterateProject {
   title: string;
   imageDataUrl?: string;
   imageMediaType?: string;
+  figmaUrl?: string;
 }
 
 interface IterateViewProps {
@@ -134,6 +135,7 @@ export default function IterateView({ onBack }: IterateViewProps) {
       setProjects((prev) => prev.map((p) => p.id === id ? { ...p, imageDataUrl, imageMediaType } : p));
       generateCritique(imageDataUrl, name, id);
     } else if (figmaUrl) {
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, figmaUrl } : p));
       setIsGenerating(true);
       try {
         const res = await fetch("/api/figma-screenshot", {
@@ -281,6 +283,10 @@ export default function IterateView({ onBack }: IterateViewProps) {
         onIterate={handleIterate}
         onRefineFeedback={handleRefineFeedback}
         width={feedbackWidth}
+        figmaUrl={activeProject?.figmaUrl}
+        imageBase64={activeProject?.imageDataUrl}
+        imageMediaType={activeProject?.imageMediaType}
+        projectTitle={activeProject?.title}
       />
     </div>
   );
