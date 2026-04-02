@@ -53,3 +53,4 @@ Get a token at figma.com → Settings → Personal access tokens. Without it, th
 ## Questions / bugs
 
 Ping @sisi in Slack or open an issue on the repo.
+
